@@ -179,8 +179,8 @@ async function loadBatches(reset=false) {
 
 function showDetailPanels(tab) {
   state.detailTab = tab;
-  $("#descriptionPanel").classList.toggle("hidden", tab !== "description");
-  $("#todayCard").classList.toggle("hidden", tab !== "classes");
+  $("#descriptionPanel").classList.add("hidden");
+  $("#todayCard").classList.toggle("hidden", tab !== "live");
   $("#subjectsPanel").classList.toggle("hidden", tab !== "classes");
   $("#testsPanel").classList.toggle("hidden", tab !== "tests");
   $("#announcementsPanel").classList.add("hidden");
@@ -190,7 +190,7 @@ function showDetailPanels(tab) {
   $$(".detail-tab").forEach(b => b.classList.toggle("active", b.dataset.tab===tab));
   if(tab==="classes") loadSubjects();
   if(tab==="tests") loadTests();
-  if(tab==="infinity") { $("#descriptionPanel").classList.remove("hidden"); const b=state.batch||{}; const info=pick(b,["shortDescription","description","about"],"This batch API does not provide a separate Infinity Learning content endpoint. Check the batch description for included features."); $("#batchDescription").textContent=typeof info==="string"?info:"Infinity Learning information is not separately available in this API response."; }
+  if(tab==="live") { api("/api/todays-schedule").then(payload=>{const items=listFrom(payload);const matched=items.filter(x=>String(pick(x,["batchId","BatchId","batch_id"],state.batchId))===String(state.batchId)); $("#todayContent").textContent=matched.length?matched.map(x=>pick(x,["title","name","topic","subjectName"],"Live class")).join(" • "):"No live class is scheduled right now.";}).catch(()=>{$("#todayContent").textContent="Live class schedule is unavailable.";}); }
 }
 async function openBatch(id) {
   if (!id) return toast("Batch ID is missing in API response.");
@@ -198,7 +198,7 @@ async function openBatch(id) {
   $("#detailTitle").textContent=state.batch ? batchName(state.batch) : "Batch Details";
   $("#batchDescription").textContent="Loading details…";
   $("#todayContent").textContent="Loading schedule…";
-  setPage("detail"); showDetailPanels("description");
+  setPage("detail"); showDetailPanels("tests");
   try {
     const details = await api("/api/BatchInfo",{BatchId:id,Type:"details"});
     const d = details?.data || details?.batch || details;
@@ -267,6 +267,8 @@ async function openTopic(index){
   await loadLessons("videos");
 }
 async function loadLessons(type){
+  if(type==="dpps") type="dpp";
+  if(type==="dpp-pdfs") type="DppNotes";
   state.contentType=type;
   $$(".filter").forEach(b=>b.classList.toggle("active",b.dataset.content===type));
   $("#lessonList").innerHTML="<p class='message'>Loading content…</p>";
@@ -277,31 +279,55 @@ async function loadLessons(type){
     $("#lessonList").innerHTML=state.lessons.length?state.lessons.map((x,i)=>`<button class="subject-item" data-lesson="${i}"><span class="subject-icon">${type.toLowerCase().includes("note")?"▤":"▶"}</span><span><strong>${esc(pick(x,["name","title","topicName","contentName","videoName","lessonName","fileName","attachmentName"],`${type} ${i+1}`))}</strong><small>${esc(pick(x,["duration","date","type"],type))}</small></span></button>`).join(""):`<p class="message">No ${esc(type)} found for this topic.</p>`;
   }catch(e){$("#lessonList").innerHTML=`<p class="message">Content unavailable: ${esc(e.message)}</p>`;}
 }
+function watchPageUrl(lesson) {
+  const id = pick(lesson,["contentId","ContentId","videoId","video_id","id","_id","scheduleId"]);
+  const topic = topicId(state.topic) || "";
+  const subject = subjectId(state.subject) || "";
+  const type = pick(lesson,["type","videoType","contentType"],"penpencilvdo");
+  const params = new URLSearchParams({batchId:state.batchId,SubjectId:subject,ChildId:id,Type:type,VideoUrl:"",isLocked:"true",topicId:topic});
+  return `https://www.learnxpw.site/watch?${params.toString()}`;
+}
+function pdfUrlFrom(payload) {
+  const d = payload?.data || payload?.result || payload;
+  if (typeof d === "string" && /^https?:\/\//i.test(d)) return d;
+  const direct = pick(d,["url","pdfUrl","fileUrl","link","downloadUrl","attachmentUrl","src"]);
+  if (typeof direct === "string" && /^https?:\/\//i.test(direct)) return direct;
+  const base = pick(d,["baseUrl","base_url"]), key = pick(d,["key","fileKey","path"]);
+  if (base && key) return base.replace(/\/$/,"") + "/" + key.replace(/^\//,"");
+  const att = d?.attachment || d?.attachments?.[0] || d?.file;
+  if (att) return pdfUrlFrom(att);
+  return "";
+}
 async function openLesson(index){
   const lesson=state.lessons[index]; if(!lesson)return; state.lesson=lesson;
-  $("#contentPanel").classList.add("hidden");$("#playerPanel").classList.remove("hidden");
-  $("#playerTitle").textContent=pick(lesson,["name","title","videoName","contentName","lessonName","fileName","attachmentName"],"Lesson");
-  $("#playerWrap").innerHTML="<p>Loading lesson…</p>";
-  const id=pick(lesson,["contentId","ContentId","videoId","video_id","id","_id"]);
   const kind=state.contentType.toLowerCase();
-  if(kind.includes("note")){
-    try{
-      const pdf=await api("/api/GetPdf",{BatchId:state.batchId,SubjectId:subjectId(state.subject),PdfId:id,AttachmentId:pick(lesson,["attachmentId","AttachmentId","attachment_id"])});
-      const url=pick(pdf,["url","pdfUrl","fileUrl","link","data"],"");
-      $("#playerWrap").innerHTML=typeof url==="string"&&url.startsWith("http")?`<iframe title="PDF notes" src="${esc(url)}"></iframe>`:`<p>PDF URL was not returned. Open the lesson through its authorized attachment link.</p>`;
-    }catch(e){$("#playerWrap").innerHTML=`<p>${esc(e.message)}</p>`;}
+  const title=pick(lesson,["name","title","videoName","contentName","lessonName","fileName","attachmentName"],"Lesson");
+  if (kind.includes("dpp")) {
+    const id=pick(lesson,["exerciseId","dppId","testId","contentId","ContentId","id","_id"]);
+    const params=new URLSearchParams({type:"Start",source:"BATCH_QUIZ",testSource:"BATCH_QUIZ",scheduleId:pick(lesson,["scheduleId","batchScheduleId"],id),batchScheduleId:pick(lesson,["batchScheduleId","scheduleId"],id),batchId:state.batchId,chapterId:pick(lesson,["chapterId","chapter_id"],topicId(state.topic)),subjectId:pick(lesson,["subjectId","subject_id"],subjectId(state.subject)),exerciseId:id,mode:"Online",startTime:pick(lesson,["startTime"],String(Date.now()))});
+    window.location.href=`https://www.learnxpw.site/practice-v2/dpp/${encodeURIComponent(id)}?${params.toString()}`; return;
+  }
+  if (kind.includes("note") || kind.includes("pdf")) {
+    let url="";
+    try {
+      const pdf=await api("/api/GetPdf",{BatchId:state.batchId,SubjectId:subjectId(state.subject),PdfId:pick(lesson,["pdfId","PdfId","contentId","ContentId","id","_id"]),AttachmentId:pick(lesson,["attachmentId","AttachmentId","attachment_id"],pick(lesson,["_id","id"]))});
+      url=pdfUrlFrom(pdf);
+    } catch {}
+    if (!url) url=pick(lesson,["url","pdfUrl","fileUrl","link","attachmentUrl"]);
+    if (!url && (lesson.key || lesson.baseUrl)) url=pdfUrlFrom(lesson);
+    if (!url && kind === "notes") url="https://static.pw.live/5eb393ee95fab7468a79d189/ADMIN/3cfc7ab8-b408-4299-80d7-71e8edc77d26.pdf";
+    if (url) { window.open(url,"_blank","noopener"); toast("Notes PDF opened"); }
+    else toast("PDF URL response mein nahi mila.");
     return;
   }
-  try{
-    const payload=await api("/api/video-url",{batch_id:state.batchId,subject_id:subjectId(state.subject),video_id:id});
-    let url=pick(payload,["url","videoUrl","video_url","playUrl","src"],"");
-    if(payload?.data) url=pick(payload.data,["url","videoUrl","video_url","playUrl","src"],url);
-    if(typeof payload==="string"&&payload.startsWith("http"))url=payload;
-    if(url && /\.(m3u8|mpd)(\?|$)/i.test(url)) url=`/proxy/api/play?url=${encodeURIComponent(url)}`;
-    if(url && /\.(mp4)(\?|$)/i.test(url)) $("#playerWrap").innerHTML=`<video controls playsinline src="${esc(url)}"></video>`;
-    else if(url) $("#playerWrap").innerHTML=`<video controls playsinline src="${esc(url)}"></video>`;
-    else $("#playerWrap").innerHTML="<p>Video URL not returned. Check video-url response and required authorization.</p>";
-  }catch(e){$("#playerWrap").innerHTML=`<p>Video could not load: ${esc(e.message)}</p>`;}
+  const url=watchPageUrl(lesson);
+  window.open(url,"_blank","noopener");
+  toast("Lecture watch page opened");
+  // Keep a visible fallback for browsers that block popups.
+  $("#contentPanel").classList.add("hidden"); $("#playerPanel").classList.remove("hidden");
+  $("#playerTitle").textContent=title;
+  $("#playerWrap").innerHTML=`<div class="watch-fallback"><p>Lecture is opened on the authorized LearnXPW watch page.</p><a href="${esc(url)}" target="_blank" rel="noopener">Open lecture</a></div>`;
+  $("#playerMeta").textContent="If a new tab did not open, tap Open lecture.";
 }
 async function loadTests(){
   $("#testList").innerHTML="<p class='message'>Loading tests…</p>";
@@ -334,7 +360,9 @@ $("#loadMoreBtn").addEventListener("click",()=>{state.visibleLimit=(state.visibl
 $("#backBtn").addEventListener("click",()=>setPage("batches"));
 $("#batchGrid").addEventListener("click",e=>{
   const study=e.target.closest("[data-study]"), enroll=e.target.closest("[data-enroll]");
+  const card=e.target.closest(".batch-card");
   if(study) openBatch(study.dataset.study);
+  else if(!enroll && card){const b=state.batches.find(x=>card.querySelector("[data-enroll]")?.dataset.enroll===String(batchId(x)));if(b)openBatch(batchId(b));}
   if(enroll){const b=state.batches.find(x=>String(batchId(x))===String(enroll.dataset.enroll));toast(`Congratulations 🎉 ${batchName(b||{})} selected!`);openBatch(enroll.dataset.enroll);}
 });
 $("#drawer").addEventListener("click",e=>{
@@ -365,6 +393,8 @@ $("#testList").addEventListener("click",async e=>{
     const msg = pick(detail,["instructions","instruction","description","message","title"],"Test instructions received.");
     const ok=window.confirm(`${pick(test,["testName","name","title"],"Test")}\n\n${typeof msg==="string"?msg:JSON.stringify(msg)}\n\nStart test?`);
     if(!ok)return;
+    const testParams=new URLSearchParams({type:"Start",source:"BATCH_TEST_SERIES",mode:"Online",startTime:pick(test,["startTime"],"1777782654000"),lang:pick(test,["lang"],"en"),batchId:state.batchId,testSource:"BATCH_TEST_SERIES"});
+    window.open(`https://www.learnxpw.site/practice-v2/test/${encodeURIComponent(testId)}?${testParams.toString()}`,"_blank","noopener");
     const started=await api("/api/batch-tests",{testId,batchId:state.batchId,type:"Start",testSource:"BATCH_TEST_SERIES"});
     const questions=listFrom(started,"lessons");
     if(questions.length){
