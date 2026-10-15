@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>Prep Master</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="menuBtn" aria-label="Open menu"><span class="hamburger">☰</span></button>
+    <button class="back-btn hidden" id="backBtn">‹ <span>Back</span></button>
+    <div class="top-spacer"></div>
+    <div class="xp-pill">⭐ <b id="xpValue">0 XP</b></div>
+    <button class="icon-btn" id="themeBtn" aria-label="Toggle theme">☼</button>
+    <div class="avatar">PM</div>
+  </header>
+
+  <div class="scrim hidden" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-brand"><div class="brand-mark">ϟ</div><b>PREP MASTER</b><span class="cap-icon">♧</span></div>
+    <nav>
+      <button class="nav-item" data-page="study"><span>▣</span> Study</button>
+      <button class="nav-item active" data-page="batches"><span>▤</span> Batches</button>
+      <button class="nav-item" data-page="mybatches"><span>♧</span> My Batches</button>
+      <a class="nav-item" href="https://t.me/prepmaster0" target="_blank" rel="noopener"><span>➤</span> Join Telegram</a>
+      <button class="nav-item" data-page="tests"><span>☑</span> Test Series</button>
+    </nav>
+    <div class="drawer-footer">DEVELOPED BY SUBHAN ALI</div>
+  </aside>
+
+  <main id="appMain">
+    <section id="batchListPage" class="page">
+      <div class="outer-panel">
+        <h1>Batches</h1>
+        <form class="searchbar" id="searchForm">
+          <span class="search-icon">⌕</span>
+          <input id="searchInput" placeholder="Search Your Batch" autocomplete="off">
+          <button type="submit">Search</button>
+        </form>
+        <div class="promo-banner">
+          <div class="promo-copy"><small>WELCOME TO</small><strong>PREP MASTER</strong><span>LEARN • PRACTICE • SUCCEED</span></div>
+          <div class="promo-orbit">PM</div>
+        </div>
+        <div class="result-line"><span id="batchCount">Loading batches…</span><button id="refreshBtn" class="subtle-btn">↻ Refresh</button></div>
+        <div id="batchGrid" class="batch-grid"></div>
+        <button id="loadMoreBtn" class="load-more hidden">Load more batches</button>
+        <p id="listMessage" class="message"></p>
+      </div>
+    </section>
+
+    <section id="batchDetailPage" class="page hidden">
+      <div class="detail-hero">
+        <div class="hero-title" id="detailTitle">Batch</div>
+        <div class="detail-tabs" id="detailTabs">
+          <button class="detail-tab active" data-tab="description">📘<span>Description</span></button>
+          <button class="detail-tab" data-tab="classes">🎁<span>All Classes</span></button>
+          <button class="detail-tab" data-tab="tests">📝<span>Tests</span></button>
+          <button class="detail-tab" data-tab="infinity">♾️<span>Infinity Learning</span></button>
+        </div>
+        <div class="detail-actions">
+          <button id="shareBatchBtn">▢ Share Batch</button>
+          <button id="announcementBtn">♧ Announcement</button>
+        </div>
+      </div>
+      <section class="content-card" id="todayCard">
+        <h2>Today's Class</h2>
+        <div id="todayContent" class="empty-state">Loading schedule…</div>
+      </section>
+      <section class="content-card" id="descriptionPanel">
+        <h2>About this batch</h2><div id="batchDescription" class="description-text">Loading details…</div>
+      </section>
+      <section class="content-card hidden" id="subjectsPanel">
+        <h2>Subjects</h2><div id="subjectList" class="subject-list"></div>
+      </section>
+      <section class="content-card hidden" id="testsPanel">
+        <h2>Test Series</h2><div id="testList" class="subject-list"></div>
+      </section>
+      <section class="content-card hidden" id="announcementsPanel">
+        <h2>Announcements</h2><div id="announcementList" class="subject-list"></div>
+      </section>
+      <section class="content-card hidden" id="chaptersPanel">
+        <button class="text-back" id="backSubjectsBtn">‹ Subjects</button>
+        <h2 id="chapterHeading">Chapters / Topics</h2><div id="chapterList" class="subject-list"></div>
+      </section>
+      <section class="content-card hidden" id="contentPanel">
+        <button class="text-back" id="backChaptersBtn">‹ Topics</button>
+        <h2 id="contentHeading">Lessons</h2>
+        <div class="content-filters" id="contentFilters">
+          <button class="filter active" data-content="videos">Videos</button>
+          <button class="filter" data-content="notes">Notes</button>
+          <button class="filter" data-content="DppVideos">DPP Videos</button>
+          <button class="filter" data-content="DppNotes">DPP Notes</button>
+        </div>
+        <div id="lessonList" class="subject-list"></div>
+      </section>
+      <section class="content-card hidden" id="playerPanel">
+        <button class="text-back" id="backLessonsBtn">‹ Lessons</button>
+        <h2 id="playerTitle">Lesson</h2>
+        <div id="playerWrap" class="player-wrap"><p>Choose a lesson to play.</p></div>
+        <div id="playerMeta"></div>
+      </section>
+    </section>
+
+    <section id="comingSoonPage" class="page hidden">
+      <div class="coming-card"><div class="coming-icon">☑</div><h1>Test Series</h1><p>Coming Soon</p><span>Prep Master</span></div>
+    </section>
+  </main>
+  <footer>DEVELOPED BY SUBHAN ALI</footer>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
