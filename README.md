@@ -24,9 +24,9 @@ Optional environment variable:
 - `UPSTREAM_API_ORIGIN` (default `https://www.learnxpw.site`)
 
 ## Important API notes
-- Batch listing starts at `/api/AllBatches?page=1`; pagination is loaded using response metadata when available. If the API omits total-page metadata, the Load more button remains available while the API returns items.
+- Batch listing starts at `/api/AllBatches?page=1`. The observed response reports `totalPages: 682`, `pageSize: 20`, and `total: 13631`; the app now requests all pages in small groups and makes the loaded list searchable. It renders up to 120 cards at once for performance, with “Show more batches” to reveal more cards. Batch thumbnails can use the nested `previewImage.baseUrl + previewImage.key` shape returned by the API.
 - The IDs in example endpoints are not hardcoded; IDs are taken from API responses.
-- The actual API response schemas can vary. If an endpoint uses different field names, adjust the `pick()` key lists in `public/app.js`.
+- The actual API response schemas can vary. If an endpoint uses different field names, adjust the `pick()` key lists in `public/app.js`. For the observed BatchInfo response, subjects are in `data.subjects`, display names use `subject`, and the SubjectInfo URL uses the subject `slug` (for example `physics-688645`), not the internal `subjectId` field.
 - Some providers may require authorization, cookies, valid signed URLs, or approved access. The proxy does not bypass authentication or access controls. Do not put private API keys or credentials in frontend code.
 - The browser-internal `chrome-extension://.../pdf_viewer_wrapper.js` files are not API endpoints and are intentionally not used.
 - Signed video URLs expire; resolve a fresh URL when a lesson is opened.
