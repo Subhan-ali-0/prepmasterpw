@@ -35,3 +35,14 @@ Optional environment variable:
 - For all batches to load, the API must permit paginated requests. The UI includes Load more rather than assuming page 1 contains everything.
 - Footer text is exactly: **DEVELOPED BY SUBHAN ALI**.
 - Telegram link: https://t.me/prepmaster0
+
+## Final UI/content updates
+- Batch cards use the title, banner image, audience/language, dates, price and Study/Enroll actions; tapping a card opens its details.
+- Batch detail tabs: Tests, All Classes and Live Classes.
+- Content filters: Lectures, DPPs, Notes, DPP PDFs and DPP Videos.
+- Lectures open the supplied LearnXPW `/watch` page using the selected batch, subject, topic and lesson IDs. This depends on the upstream page allowing the user's access/session.
+- Tests and DPPs open the supplied LearnXPW practice pages with IDs from the selected item where available.
+- Notes use the GetPdf response `data.baseUrl + data.key`, direct attachment URLs, or the provided static notes PDF fallback.
+- Footer text: `DEVELOPED BY SUBHAN ALI`.
+
+The upstream APIs may require a valid authorized session and can return 403. The site does not bypass upstream authorization. Test/DPP and content IDs are mapped from fields present in the API response; if a particular batch uses different field names, those fields may need a mapping adjustment.
