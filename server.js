@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import path from "node:path";
@@ -6,285 +5,128 @@ import { fileURLToPath } from "node:url";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
-
-const RARE_BATCHES =
-  "https://rarestudy.github.io/rarestudy/batches.json?v=1792148560961";
-
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Batch catalogue supplied by the user. Fetched server-side so the browser only calls this site's proxy.
+const BATCHES_SOURCE = "https://prepmasterpw.vercel.app/api/batches";
 const STREAM_BASE = "https://proxy.streamvideo.co.in/fetch";
-
+const KHazana = {
+  programId: "62cc7a39ea773600110bec2f",
+  subjectId: "62cc853e8f90fa001898321e",
+  chapterId: "69c2695884245c85d1b3ddcb",
+  topicId: "69c26b18f269271e6eadfe7b",
+  subTopicId: "69c26b18974b391b3b603c8e"
+};
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
-app.use(express.static(path.join(ROOT, "public")));
+app.use(express.static(path.join(__dirname, "public")));
 
-async function fetchUpstream(url, res) {
+async function sendUpstream(url, res) {
   try {
     const response = await fetch(url, {
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent": "PrepMaster/1.0"
-      },
+      headers: { Accept: "application/json, text/plain, */*", "User-Agent": "PrepMaster/1.0" },
       signal: AbortSignal.timeout(20000)
     });
-
     const body = Buffer.from(await response.arrayBuffer());
-
-    res
-      .status(response.status)
-      .set(
-        "Content-Type",
-        response.headers.get("content-type") ||
-          "application/json"
-      )
+    res.status(response.status)
+      .set("Content-Type", response.headers.get("content-type") || "application/json; charset=utf-8")
       .set("Cache-Control", "no-store")
       .send(body);
   } catch (error) {
-    res.status(502).json({
-      error: "Upstream request failed",
-      message: error.message
-    });
+    res.status(502).json({ error: "Upstream request failed", message: error.message });
   }
 }
-
-function param(req, ...keys) {
-  for (const key of keys) {
-    const value = req.query[key];
-    if (value !== undefined && value !== "") {
-      return String(value);
-    }
+function q(req, ...names) {
+  for (const name of names) {
+    const value = req.query[name];
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
   return "";
 }
-
-function streamUrl(pathname, query = {}) {
-  const url = new URL(pathname, STREAM_BASE);
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== "") {
-      url.searchParams.set(key, String(value));
-    }
+function streamUrl(pathname, params = {}) {
+  // Concatenation is intentional: URL(base, '/path') would discard the required /fetch prefix.
+  const url = new URL(`${STREAM_BASE}${pathname.startsWith("/") ? pathname : `/${pathname}`}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value) !== "") url.searchParams.set(key, String(value));
   }
-
   return url;
 }
 
-// Health check
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    app: "Prep Master",
-    batchSource: "RareStudy",
-    contentSource: "StreamVideo/PenPencil"
-  });
+// The frontend uses only same-origin /proxy requests; upstream URLs never run in browser JavaScript.
+app.get("/proxy/api/AllBatches", async (_req, res) => sendUpstream(BATCHES_SOURCE, res));
+app.get("/proxy/api/BatchInfo", async (req, res) => {
+  const id = q(req, "BatchId", "batchId");
+  if (!id) return res.status(400).json({ error: "BatchId is required" });
+  if (q(req, "Type") === "announcement") return res.status(501).json({ error: "No announcements endpoint was supplied for this provider." });
+  return sendUpstream(streamUrl(`/api.penpencil.co/v3/batches/${encodeURIComponent(id)}/details`), res);
+});
+app.get("/proxy/api/todays-schedule", async (req, res) => {
+  const id = q(req, "BatchId", "batchId");
+  if (!id) return res.status(400).json({ error: "BatchId is required" });
+  return sendUpstream(streamUrl(`/api.penpencil.co/v2/batches/${encodeURIComponent(id)}/todays-schedule`), res);
+});
+app.get("/proxy/api/Schedule", async (req, res) => {
+  const id = q(req, "BatchId", "batchId");
+  if (!id) return res.status(400).json({ error: "BatchId is required" });
+  return sendUpstream(streamUrl(`/api.penpencil.co/v2/batches/${encodeURIComponent(id)}/todays-schedule`, { page: q(req, "page") || "1" }), res);
+});
+app.get("/proxy/api/SubjectInfo", async (req, res) => {
+  const batchId = q(req, "BatchId", "batchId"), subjectId = q(req, "SubjectId", "subjectId");
+  if (!batchId || !subjectId) return res.status(400).json({ error: "BatchId and SubjectId are required" });
+  return sendUpstream(streamUrl(`/api.penpencil.co/v2/batches/${encodeURIComponent(batchId)}/subject/${encodeURIComponent(subjectId)}/topics`, { page: q(req, "page") || "1" }), res);
+});
+app.get("/proxy/api/TopicInfo", async (req, res) => {
+  const batchId = q(req, "BatchId", "batchId"), subjectId = q(req, "SubjectId", "subjectId"), topicId = q(req, "TopicId", "topicId");
+  if (!batchId || !subjectId || !topicId) return res.status(400).json({ error: "BatchId, SubjectId and TopicId are required" });
+  let contentType = q(req, "ContentType", "contentType") || "videos";
+  if (contentType.toLowerCase() === "dpps") contentType = "DppVideos";
+  if (contentType.toLowerCase() === "dpp-pdfs") contentType = "DppNotes";
+  return sendUpstream(streamUrl(`/api.penpencil.co/v2/batches/${encodeURIComponent(batchId)}/subject/${encodeURIComponent(subjectId)}/contents`, { page: q(req, "page") || "1", contentType, tag: topicId }), res);
+});
+app.get("/proxy/api/batch-tests", async (req, res) => {
+  const batchId = q(req, "batchId", "BatchId");
+  if (!batchId) return res.status(400).json({ error: "batchId is required" });
+  const params = { batchId, isSubjective: q(req, "isSubjective") || "false" };
+  if (q(req, "categorySectionId")) params.categorySectionId = q(req, "categorySectionId");
+  return sendUpstream(streamUrl("/api.penpencil.co/v3/test-service/tests", params), res);
+});
+app.get("/proxy/api/user-details", async (req, res) => {
+  const userIds = q(req, "userIds");
+  if (!userIds) return res.status(400).json({ error: "userIds is required" });
+  return sendUpstream(streamUrl("/api.penpencil.co/v1/users/get-user-details-list", { userIds }), res);
+});
+app.get("/proxy/api/test-instructions", async (req, res) => {
+  const testId = q(req, "testId", "TestId");
+  if (!testId) return res.status(400).json({ error: "testId is required" });
+  return sendUpstream(streamUrl(`/api.penpencil.co/v3/test-service/tests/${encodeURIComponent(testId)}/instructions`), res);
+});
+app.get("/proxy/api/dpp-tests", async (req, res) => {
+  const batchId = q(req, "batchId", "BatchId"), subjectId = q(req, "batchSubjectId", "SubjectId", "subjectId"), chapterId = q(req, "chapterId", "TopicId", "topicId");
+  if (!batchId || !subjectId || !chapterId) return res.status(400).json({ error: "batchId, batchSubjectId and chapterId are required" });
+  return sendUpstream(streamUrl("/api.penpencil.co/v3/test-service/tests/dpp", { batchId, batchSubjectId: subjectId, chapterId, isSubjective: q(req, "isSubjective") || "false", page: q(req, "page") || "1" }), res);
+});
+app.get("/proxy/api/test-filters", async (req, res) => {
+  const batchId = q(req, "batchId", "BatchId");
+  if (!batchId) return res.status(400).json({ error: "batchId is required" });
+  return sendUpstream(streamUrl("/api.penpencil.co/v3/test-service/tests/filters", { batchId, isSubjective: q(req, "isSubjective") || "false" }), res);
 });
 
-// RareStudy: batch catalogue
-app.get("/api/batches", async (_req, res) => {
-  await fetchUpstream(RARE_BATCHES, res);
+// Khazana endpoints supplied by the user, proxied through this server.
+app.get("/proxy/api/khazana/filters", async (req, res) => sendUpstream(streamUrl(`/api.penpencil.co/v2/programs/${KHazana.programId}/filters`, { page: q(req, "page") || "1", limit: q(req, "limit") || "20" }), res));
+app.get("/proxy/api/khazana/chapters", async (req, res) => sendUpstream(streamUrl(`/api.penpencil.co/v2/programs/${KHazana.programId}/subjects/${KHazana.subjectId}/chapters/list`, { page: q(req, "page") || "1", limit: q(req, "limit") || "20" }), res));
+app.get("/proxy/api/khazana/topics", async (req, res) => sendUpstream(streamUrl(`/api.penpencil.co/v2/programs/${KHazana.programId}/subjects/${KHazana.subjectId}/chapters/${encodeURIComponent(q(req, "chapterId") || KHazana.chapterId)}/topics/list`, { page: q(req, "page") || "1", limit: q(req, "limit") || "20" }), res));
+app.get("/proxy/api/khazana/sub-topics", async (req, res) => sendUpstream(streamUrl(`/api.penpencil.co/v2/programs/${KHazana.programId}/subjects/${KHazana.subjectId}/chapters/${encodeURIComponent(q(req, "chapterId") || KHazana.chapterId)}/topics/${encodeURIComponent(q(req, "topicId") || KHazana.topicId)}/contents/sub-topic`, { page: q(req, "page") || "1", limit: q(req, "limit") || "20" }), res));
+app.get("/proxy/api/khazana/contents", async (req, res) => sendUpstream(streamUrl(`/api.penpencil.co/v2/programs/${KHazana.programId}/subjects/${KHazana.subjectId}/chapters/${encodeURIComponent(q(req, "chapterId") || KHazana.chapterId)}/topics/${encodeURIComponent(q(req, "topicId") || KHazana.topicId)}/sub-topic/${encodeURIComponent(q(req, "subTopicId") || KHazana.subTopicId)}/contents`, { page: q(req, "page") || "1", limit: q(req, "limit") || "20" }), res));
+
+// Fixed-host proxy only: no arbitrary URL forwarding, credential injection, or access-control bypass.
+app.get("/api/stream/*splat", async (req, res) => {
+  const route = "/" + (req.params.splat || []).join("/");
+  const allowed = ["/api.penpencil.co/v1/users/", "/api.penpencil.co/v2/batches/", "/api.penpencil.co/v2/programs/", "/api.penpencil.co/v3/batches/", "/api.penpencil.co/v3/test-service/"];
+  if (!allowed.some(prefix => route.startsWith(prefix))) return res.status(404).json({ error: "StreamVideo route not allowed" });
+  return sendUpstream(streamUrl(route, req.query), res);
 });
-
-// StreamVideo: batch details
-app.get("/api/batch-info", async (req, res) => {
-  const batchId = param(req, "batchId", "BatchId");
-
-  if (!batchId) {
-    return res.status(400).json({
-      error: "batchId is required"
-    });
-  }
-
-  await fetchUpstream(
-    streamUrl(
-      `/api.penpencil.co/v3/batches/${encodeURIComponent(batchId)}/details`
-    ),
-    res
-  );
-});
-
-// StreamVideo: today's classes
-app.get("/api/todays-schedule", async (req, res) => {
-  const batchId = param(req, "batchId", "BatchId");
-
-  if (!batchId) {
-    return res.status(400).json({
-      error: "batchId is required"
-    });
-  }
-
-  await fetchUpstream(
-    streamUrl(
-      `/api.penpencil.co/v2/batches/${encodeURIComponent(batchId)}/todays-schedule`
-    ),
-    res
-  );
-});
-
-// StreamVideo: subjects/topics
-app.get("/api/subjects", async (req, res) => {
-  const batchId = param(req, "batchId", "BatchId");
-  const subjectId = param(req, "subjectId", "SubjectId");
-
-  if (!batchId || !subjectId) {
-    return res.status(400).json({
-      error: "batchId and subjectId are required"
-    });
-  }
-
-  await fetchUpstream(
-    streamUrl(
-      `/api.penpencil.co/v2/batches/${encodeURIComponent(batchId)}/subject/${encodeURIComponent(subjectId)}/topics`,
-      { page: param(req, "page") || "1" }
-    ),
-    res
-  );
-});
-
-// StreamVideo: lectures, notes and DPP content
-app.get("/api/lectures", async (req, res) => {
-  const batchId = param(req, "batchId", "BatchId");
-  const subjectId = param(req, "subjectId", "SubjectId");
-  const topicId = param(req, "topicId", "TopicId");
-  let contentType = param(req, "contentType", "ContentType") || "videos";
-
-  const allowedTypes = [
-    "videos",
-    "notes",
-    "DppNotes",
-    "DppVideos"
-  ];
-
-  const matchedType = allowedTypes.find(
-    type => type.toLowerCase() === contentType.toLowerCase()
-  );
-
-  if (!matchedType) {
-    return res.status(400).json({
-      error: "Unsupported contentType"
-    });
-  }
-
-  if (!batchId || !subjectId || !topicId) {
-    return res.status(400).json({
-      error: "batchId, subjectId and topicId are required"
-    });
-  }
-
-  await fetchUpstream(
-    streamUrl(
-      `/api.penpencil.co/v2/batches/${encodeURIComponent(batchId)}/subject/${encodeURIComponent(subjectId)}/contents`,
-      {
-        page: param(req, "page") || "1",
-        contentType: matchedType,
-        tag: topicId
-      }
-    ),
-    res
-  );
-});
-
-// StreamVideo: objective/subjective tests and DPP tests
-app.get("/api/tests", async (req, res) => {
-  const batchId = param(req, "batchId", "BatchId");
-
-  if (!batchId) {
-    return res.status(400).json({
-      error: "batchId is required"
-    });
-  }
-
-  const query = {
-    batchId,
-    isSubjective: param(req, "isSubjective") || "false"
-  };
-
-  const categorySectionId = param(req, "categorySectionId");
-  if (categorySectionId) {
-    query.categorySectionId = categorySectionId;
-  }
-
-  await fetchUpstream(
-    streamUrl("/api.penpencil.co/v3/test-service/tests", query),
-    res
-  );
-});
-
-app.get("/api/dpp-tests", async (req, res) => {
-  const batchId = param(req, "batchId", "BatchId");
-  const subjectId = param(req, "subjectId", "SubjectId");
-  const chapterId = param(req, "chapterId", "ChapterId");
-
-  if (!batchId || !subjectId || !chapterId) {
-    return res.status(400).json({
-      error: "batchId, subjectId and chapterId are required"
-    });
-  }
-
-  await fetchUpstream(
-    streamUrl("/api.penpencil.co/v3/test-service/tests/dpp", {
-      batchId,
-      batchSubjectId: subjectId,
-      chapterId,
-      isSubjective: param(req, "isSubjective") || "false",
-      page: param(req, "page") || "1"
-    }),
-    res
-  );
-});
-
-// StreamVideo: test instructions
-app.get("/api/test-instructions", async (req, res) => {
-  const testId = param(req, "testId", "TestId");
-
-  if (!testId) {
-    return res.status(400).json({
-      error: "testId is required"
-    });
-  }
-
-  await fetchUpstream(
-    streamUrl(
-      `/api.penpencil.co/v3/test-service/tests/${encodeURIComponent(testId)}/instructions`
-    ),
-    res
-  );
-});
-
-// StreamVideo: Khazana API paths
-// Only fixed, supported PenPencil paths are accepted.
-app.get("/api/khazana/*path", async (req, res) => {
-  const pathParts = req.params.path || [];
-  const pathname = "/" + pathParts.join("/");
-
-  const allowed =
-    /^\/api\.penpencil\.co\/v2\/programs\/[a-zA-Z0-9_-]+\/filters$/.test(pathname) ||
-    /^\/api\.penpencil\.co\/v2\/programs\/[a-zA-Z0-9_-]+\/subjects\/[a-zA-Z0-9_-]+\/chapters\/list$/.test(pathname) ||
-    /^\/api\.penpencil\.co\/v2\/programs\/[a-zA-Z0-9_-]+\/subjects\/[a-zA-Z0-9_-]+\/chapters\/[a-zA-Z0-9_-]+\/topics\/list$/.test(pathname) ||
-    /^\/api\.penpencil\.co\/v2\/programs\/[a-zA-Z0-9_-]+\/subjects\/[a-zA-Z0-9_-]+\/chapters\/[a-zA-Z0-9_-]+\/topics\/[a-zA-Z0-9_-]+\/contents\/sub-topic$/.test(pathname) ||
-    /^\/api\.penpencil\.co\/v2\/programs\/[a-zA-Z0-9_-]+\/subjects\/[a-zA-Z0-9_-]+\/chapters\/[a-zA-Z0-9_-]+\/topics\/[a-zA-Z0-9_-]+\/sub-topic\/[a-zA-Z0-9_-]+\/contents$/.test(pathname);
-
-  if (!allowed) {
-    return res.status(404).json({
-      error: "Khazana route not allowed"
-    });
-  }
-
-  await fetchUpstream(streamUrl(pathname, req.query), res);
-});
-
-// Announcements API was not included in the supplied
-// StreamVideo endpoint list. Do not silently call another provider.
-app.get("/api/announcements", (_req, res) => {
-  res.status(501).json({
-    error: "No StreamVideo announcements endpoint has been supplied yet."
-  });
-});
-
-// Friendly fallback for the website
+app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Prep Master", batchSource: BATCHES_SOURCE, contentSource: "StreamVideo/PenPencil through server proxy" }));
 app.get("*path", (req, res, next) => {
-  if (req.path.startsWith("/api/")) return next();
-  res.sendFile(path.join(ROOT, "public", "index.html"));
+  if (req.path.startsWith("/proxy/") || req.path.startsWith("/api/")) return next();
+  return res.sendFile(path.join(__dirname, "public", "index.html"));
 });
-
-app.listen(PORT, () => {
-  console.log(`Prep Master running on port ${PORT}`);
-});
+app.listen(PORT, "0.0.0.0", () => console.log(`Prep Master running on port ${PORT}`));
