@@ -10,13 +10,13 @@
 <body>
   <header class="topbar">
     <button class="icon-btn" id="menuBtn" aria-label="Open menu"><span class="hamburger">☰</span></button>
+    <div class="pm-brand"><span class="pm-mark">P</span><strong>Prep Master</strong></div>
     <button class="back-btn hidden" id="backBtn">‹ <span>Back</span></button>
     <div class="top-search"><span>⌕</span><input id="topSearchInput" placeholder="Search for" autocomplete="off"></div>
   </header>
 
   <div class="scrim hidden" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-hidden="true">
-    <div class="drawer-brand"><div class="brand-mark">ϟ</div><b>PREP MASTER</b><span class="cap-icon">♧</span></div>
     <nav>
       <a class="nav-item" href="https://t.me/prepmaster0" target="_blank" rel="noopener"><span>➤</span> Join Telegram</a>
       <button class="nav-item active" data-page="batches"><span>▤</span> Batches</button>
@@ -27,10 +27,9 @@
 
   <main id="appMain">
     <section id="batchListPage" class="page">
-      <div class="home-course-strip"><span class="course-symbol">▣</span><strong>Foundation - Class 10 UP Board</strong><button id="changeCourseBtn">Change</button></div>
-      <div class="other-batches"><b>VIEW OTHER<br>BATCHES</b><div class="course-chips"><button>Chessmate by PW</button><button>11 NEET</button><button>11 IIT JEE</button><button>11 CBSE</button></div></div>
       <div class="home-content">
-        <h1 id="homeHeading">Popular courses</h1>
+        <h1 id="homeHeading">Total Batches</h1>
+        <div class="home-switch"><button class="home-switch-active" id="totalBatchesBtn">Total Batches</button><button id="favouritesBtn">Favourites ♡</button></div>
         <form class="searchbar home-search" id="searchForm"><span class="search-icon">⌕</span><input id="searchInput" placeholder="Search Your Batch" autocomplete="off"><button type="submit">Search</button></form>
         <div class="result-line"><span id="batchCount">Loading batches…</span><button id="refreshBtn" class="subtle-btn">↻ Refresh</button></div>
         <div id="batchGrid" class="batch-grid"></div>
@@ -46,13 +45,14 @@
       <div class="detail-hero">
         <div class="hero-title" id="detailTitle">Batch</div>
         <div class="detail-tabs" id="detailTabs">
-          <button class="detail-tab active" data-tab="tests">📝<span>Tests</span></button>
-          <button class="detail-tab" data-tab="classes">🎁<span>All Classes</span></button>
-          <button class="detail-tab" data-tab="live">🔴<span>Live Classes</span></button>
+          <button class="detail-tab active" data-tab="classes"><span>All Classes</span></button>
+          <button class="detail-tab" data-tab="khazana"><span>Khazana</span></button>
+          <button class="detail-tab" data-tab="tests"><span>Tests</span></button>
+          <button class="detail-tab" data-tab="announcements"><span>Announcements</span></button>
         </div>
         <div class="detail-actions">
           
-          <button id="announcementBtn">♧ Announcement</button>
+
         </div>
       </div>
       <section class="content-card" id="todayCard">
