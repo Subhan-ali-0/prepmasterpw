@@ -109,7 +109,8 @@ function formatDate(d) {
 function renderBatches() {
   const enrolled = JSON.parse(localStorage.getItem("pm-enrolled-batches") || "[]").map(String);
   const onlyMine = ["mybatches","study"].includes(state.page);
-  const filtered = state.batches.filter(b => batchName(b).toLowerCase().includes(state.query.toLowerCase()) && (!onlyMine || enrolled.includes(String(batchId(b)))));
+  const favourites = JSON.parse(localStorage.getItem("pm-favourite-batches") || "[]").map(String);
+  const filtered = state.batches.filter(b => batchName(b).toLowerCase().includes(state.query.toLowerCase()) && (!onlyMine || enrolled.includes(String(batchId(b)))) && (!state.showFavourites || favourites.includes(String(batchId(b)))));
   const visible = filtered.slice(0, state.visibleLimit || 120);
   $("#batchCount").textContent = `${filtered.length} batches${state.query ? " found" : ""}`;
   $("#batchGrid").innerHTML = visible.map((b,i) => {
@@ -117,7 +118,7 @@ function renderBatches() {
     const language = pick(b,["language","medium","batchLanguage"],"");
     return `<article class="batch-card">
       ${img ? `<img class="batch-cover" src="${esc(img)}" alt="${esc(name)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;batch-cover fallback&quot;>${esc(name)}</div>'">` : `<div class="batch-cover fallback">${esc(name)}</div>`}
-      <div class="batch-card-body"><div class="batch-kicker">Class 10</div><h2>${esc(name)}</h2>
+      <div class="batch-card-body"><div class="batch-title-row"><h2>${esc(name)}</h2><button class="favourite-btn" data-fav="${esc(id)}" aria-label="Favourite batch">${favourites.includes(String(id)) ? "❤️" : "♡"}</button></div><div class="batch-kicker">Batch</div>
       <div class="batch-meta"><div class="meta-line">▤ &nbsp;Boards / Foundation</div>${language ? `<div class="meta-line">♙ &nbsp;${esc(language)}</div>` : ""}${dates ? `<div class="meta-line">🔴 &nbsp;Ongoing | ${esc(dates)}</div>` : ""}</div>
       <div class="price-row"><span class="price">FREE</span><span class="free-tag">100% OFF</span></div>
       <div class="card-actions"><button class="enroll-btn" data-enroll="${esc(id)}">${enrolled.includes(String(id)) ? "Enrolled ✓" : "Enroll"}</button><button class="arrow-btn" aria-label="Open batch" data-open="${esc(id)}">›</button></div></div>
@@ -184,14 +185,15 @@ function showDetailPanels(tab) {
   $("#todayCard").classList.remove("hidden");
   $("#subjectsPanel").classList.toggle("hidden", tab !== "classes");
   $("#testsPanel").classList.toggle("hidden", tab !== "tests");
-  $("#announcementsPanel").classList.add("hidden");
+  $("#announcementsPanel").classList.toggle("hidden", tab !== "announcements");
   $("#chaptersPanel").classList.add("hidden");
   $("#contentPanel").classList.add("hidden");
   $("#playerPanel").classList.add("hidden");
   $$(".detail-tab").forEach(b => b.classList.toggle("active", b.dataset.tab===tab));
-  if(tab==="classes") loadSubjects();
+  if(tab==="classes" || tab==="khazana") loadSubjects();
   if(tab==="tests") loadTests();
-  if(tab==="live") { api("/api/todays-schedule").then(payload=>{const items=listFrom(payload);const matched=items.filter(x=>String(pick(x,["batchId","BatchId","batch_id"],state.batchId))===String(state.batchId)); $("#todayContent").textContent=matched.length?matched.map(x=>pick(x,["title","name","topic","subjectName"],"Live class")).join(" • "):"No live class is scheduled right now.";}).catch(()=>{$("#todayContent").textContent="Live class schedule is unavailable.";}); }
+  if(tab==="announcements") loadAnnouncements();
+  if(tab==="live") { api("/api/todays-schedule",{BatchId:state.batchId}).catch(()=>api("/api/Schedule",{BatchId:state.batchId,page:1})).then(payload=>{const items=listFrom(payload);const matched=items.filter(x=>String(pick(x,["batchId","BatchId","batch_id"],state.batchId))===String(state.batchId)); $("#todayContent").textContent=matched.length?matched.map(x=>pick(x,["title","name","topic","subjectName"],"Live class")).join(" • "):"No live class is scheduled right now.";}).catch(()=>{$("#todayContent").textContent="Live class schedule is unavailable.";}); }
 }
 async function openBatch(id) {
   if (!id) return toast("Batch ID is missing in API response.");
@@ -211,7 +213,9 @@ async function openBatch(id) {
       : esc(desc);
   } catch(e) { $("#batchDescription").textContent=`Batch details could not load: ${e.message}`; }
   try {
-    const schedule = await api("/api/todays-schedule");
+    let schedule;
+    try { schedule = await api("/api/todays-schedule",{BatchId:id}); }
+    catch { schedule = await api("/api/Schedule",{BatchId:id,page:1}); }
     const items=listFrom(schedule);
     const matched=items.filter(x=>String(pick(x,["batchId","BatchId","batch_id"],id))===String(id));
     $("#todayContent").textContent=matched.length ? matched.map(x=>pick(x,["title","name","topic","subjectName"],"Scheduled class")).join(" • ") : "Classes not Scheduled yet";
@@ -268,8 +272,11 @@ async function openTopic(index){
   await loadLessons("videos");
 }
 async function loadLessons(type){
-  if(type==="dpps") type="dpp";
+  // Match the content-type names expected by the LearnXPW TopicInfo API.
+  if(type==="dpps") type="DppVideos";
   if(type==="dpp-pdfs") type="DppNotes";
+  if(type==="videos") type="videos";
+  if(type==="notes") type="notes";
   state.contentType=type;
   $$(".filter").forEach(b=>b.classList.toggle("active",b.dataset.content===type));
   $("#lessonList").innerHTML="<p class='message'>Loading content…</p>";
@@ -277,6 +284,13 @@ async function loadLessons(type){
   try{
     const payload=await api("/api/TopicInfo",{BatchId:state.batchId,SubjectId:sid,TopicId:tid,ContentType:type,page:1});
     state.lessons=listFrom(payload,"lessons");
+    // Follow pagination when the API provides it, so later notes/videos are not omitted.
+    const meta=pageMeta(payload);
+    const totalPages=Math.min(meta.totalPages || 1, 100);
+    for(let page=2;page<=totalPages;page++){
+      const next=await api("/api/TopicInfo",{BatchId:state.batchId,SubjectId:sid,TopicId:tid,ContentType:type,page});
+      state.lessons.push(...listFrom(next,"lessons"));
+    }
     $("#lessonList").innerHTML=state.lessons.length?state.lessons.map((x,i)=>`<button class="subject-item" data-lesson="${i}"><span class="subject-icon">${type.toLowerCase().includes("note")?"▤":"▶"}</span><span><strong>${esc(pick(x,["name","title","topicName","contentName","videoName","lessonName","fileName","attachmentName"],`${type} ${i+1}`))}</strong><small>${esc(pick(x,["duration","date","type"],type))}</small></span></button>`).join(""):`<p class="message">No ${esc(type)} found for this topic.</p>`;
   }catch(e){$("#lessonList").innerHTML=`<p class="message">Content unavailable: ${esc(e.message)}</p>`;}
 }
@@ -285,8 +299,8 @@ function watchPageUrl(lesson) {
   const topic = topicId(state.topic) || "";
   const subject = subjectId(state.subject) || "";
   const type = pick(lesson,["type","videoType","contentType"],"penpencilvdo");
-  const params = new URLSearchParams({batchId:state.batchId,SubjectId:subject,ChildId:id,Type:type,VideoUrl:"",isLocked:"true",topicId:topic});
-  return `https://www.learnxpw.site/watch?${params.toString()}`;
+  const params = new URLSearchParams({batchId:state.batchId,SubjectId:subject,ChildId:id,videoId:id,topicId:topic,scheduleId:pick(lesson,["scheduleId","batchScheduleId"],id),Type:type,isLocked:"false"});
+  return `https://m.pwmarco.site/live?${params.toString()}`;
 }
 function pdfUrlFrom(payload) {
   const d = payload?.data || payload?.result || payload;
@@ -367,7 +381,8 @@ async function loadAnnouncements(){
 }
 $("#menuBtn").addEventListener("click",openDrawer);
 $("#scrim").addEventListener("click",closeDrawer);
-$("#themeBtn").addEventListener("click",()=>{document.body.classList.toggle("dark");localStorage.setItem("pm-theme",document.body.classList.contains("dark")?"dark":"light");});
+const themeBtn = $("#themeBtn");
+if (themeBtn) themeBtn.addEventListener("click",()=>{document.body.classList.toggle("dark");localStorage.setItem("pm-theme",document.body.classList.contains("dark")?"dark":"light");});
 if(localStorage.getItem("pm-theme")==="dark")document.body.classList.add("dark");
 $("#searchForm").addEventListener("submit",e=>{e.preventDefault();state.query=$("#searchInput").value.trim();renderBatches();});
 $("#searchInput").addEventListener("input",e=>{state.query=e.target.value.trim();renderBatches();});
@@ -375,6 +390,8 @@ $("#refreshBtn").addEventListener("click",()=>loadBatches(true));
 $("#loadMoreBtn").addEventListener("click",()=>{state.visibleLimit=(state.visibleLimit||120)+120;renderBatches();});
 $("#backBtn").addEventListener("click",()=>setPage("batches"));
 $("#batchGrid").addEventListener("click",e=>{
+  const fav=e.target.closest("[data-fav]");
+  if(fav){const id=String(fav.dataset.fav);let list=JSON.parse(localStorage.getItem("pm-favourite-batches")||"[]").map(String);list=list.includes(id)?list.filter(x=>x!==id):[...list,id];localStorage.setItem("pm-favourite-batches",JSON.stringify(list));renderBatches();return;}
   const enroll=e.target.closest("[data-enroll]"), open=e.target.closest("[data-open]");
   if (enroll) {
     const id=String(enroll.dataset.enroll), b=state.batches.find(x=>String(batchId(x))===id);
@@ -403,7 +420,6 @@ document.querySelector(".bottom-nav")?.addEventListener("click",e=>{
   setPage("batches");
 });
 $("#topSearchInput").addEventListener("input",e=>{state.query=e.target.value.trim();$("#searchInput").value=e.target.value;renderBatches();});
-$("#changeCourseBtn").addEventListener("click",()=>toast("More course categories are coming soon."));
 $("#detailTabs").addEventListener("click",e=>{const btn=e.target.closest("[data-tab]");if(btn)showDetailPanels(btn.dataset.tab);});
 $("#subjectList").addEventListener("click",e=>{const btn=e.target.closest("[data-subject]");if(btn)openSubject(Number(btn.dataset.subject));});
 $("#chapterList").addEventListener("click",e=>{const btn=e.target.closest("[data-topic]");if(btn)openTopic(Number(btn.dataset.topic));});
@@ -412,7 +428,7 @@ $("#lessonList").addEventListener("click",e=>{const btn=e.target.closest("[data-
 $("#backSubjectsBtn").addEventListener("click",()=>{$("#chaptersPanel").classList.add("hidden");$("#subjectsPanel").classList.remove("hidden");$("#todayCard").classList.remove("hidden");});
 $("#backChaptersBtn").addEventListener("click",()=>{$("#contentPanel").classList.add("hidden");$("#chaptersPanel").classList.remove("hidden");});
 $("#backLessonsBtn").addEventListener("click",()=>{$("#playerPanel").classList.add("hidden");$("#contentPanel").classList.remove("hidden");});
-$("#announcementBtn").addEventListener("click",loadAnnouncements);
+const announcementBtn=$("#announcementBtn"); if(announcementBtn) announcementBtn.addEventListener("click",loadAnnouncements);
 
 $("#testList").addEventListener("click",async e=>{
   const btn=e.target.closest("[data-test]");if(!btn)return;
@@ -436,4 +452,6 @@ $("#testList").addEventListener("click",async e=>{
     }
   } catch(err){toast("Test start/instructions unavailable: "+err.message);}
 });
+const totalBtn=document.querySelector("#totalBatchesBtn"), favBtn=document.querySelector("#favouritesBtn");
+if(totalBtn&&favBtn){totalBtn.addEventListener("click",()=>{totalBtn.classList.add("home-switch-active");favBtn.classList.remove("home-switch-active");state.showFavourites=false;renderBatches();});favBtn.addEventListener("click",()=>{favBtn.classList.add("home-switch-active");totalBtn.classList.remove("home-switch-active");state.showFavourites=true;renderBatches();});}
 loadBatches(true);
