@@ -49,6 +49,30 @@ app.get("/proxy/*splat", async (req, res) => {
   }
 });
 
+
+
+// Dedicated PDF endpoint proxy. The upstream host is fixed to pwthor.live;
+// only the GetPdf route is exposed, with query parameters passed through.
+app.get("/pdf-proxy", async (req, res) => {
+  try {
+    const target = new URL("https://pwthor.live/api/GetPdf");
+    for (const [key, value] of Object.entries(req.query)) {
+      if (typeof value === "string") target.searchParams.set(key, value);
+    }
+    const upstream = await fetch(target, {
+      headers: { "Accept": "application/json, application/pdf, text/plain, */*", "User-Agent": "PrepMaster/1.0" },
+      signal: AbortSignal.timeout(20000)
+    });
+    const body = Buffer.from(await upstream.arrayBuffer());
+    res.status(upstream.status);
+    res.set("Content-Type", upstream.headers.get("content-type") || "application/octet-stream");
+    res.set("Cache-Control", "no-store");
+    res.send(body);
+  } catch (err) {
+    res.status(502).json({ error: "PDF API request failed", message: err.message });
+  }
+});
+
 app.get("/api/health", (_req, res) => res.json({ ok: true, app: "Prep Master" }));
 
 app.get("*path", (req, res, next) => {
