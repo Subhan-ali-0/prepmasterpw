@@ -82,9 +82,12 @@ function toast(msg) {
 }
 function setPage(name) {
   state.page = name;
-  $("#batchListPage").classList.toggle("hidden", name !== "batches" && name !== "mybatches" && name !== "study");
+  $("#batchListPage").classList.toggle("hidden", !["batches","mybatches","study"].includes(name));
   $("#batchDetailPage").classList.toggle("hidden", name !== "detail");
-  $("#comingSoonPage").classList.toggle("hidden", name !== "tests");
+  $("#comingSoonPage").classList.toggle("hidden", !["tests","pi","books"].includes(name));
+  if (["tests","pi","books"].includes(name)) $("#comingTitle").textContent = name === "books" ? "PW Books" : name === "pi" ? "Pi" : "Test Series";
+  $("#homeHeading").textContent = name === "mybatches" || name === "study" ? "My Batches" : "Popular courses";
+  renderBatches();
   $("#backBtn").classList.toggle("hidden", name !== "detail");
   $("#menuBtn").classList.toggle("hidden", name === "detail");
   closeDrawer();
@@ -104,25 +107,23 @@ function formatDate(d) {
   const date = new Date(d); return Number.isNaN(date.getTime()) ? String(d) : date.toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"});
 }
 function renderBatches() {
-  const filtered = state.batches.filter(b => batchName(b).toLowerCase().includes(state.query.toLowerCase()));
+  const enrolled = JSON.parse(localStorage.getItem("pm-enrolled-batches") || "[]").map(String);
+  const onlyMine = ["mybatches","study"].includes(state.page);
+  const filtered = state.batches.filter(b => batchName(b).toLowerCase().includes(state.query.toLowerCase()) && (!onlyMine || enrolled.includes(String(batchId(b)))));
   const visible = filtered.slice(0, state.visibleLimit || 120);
   $("#batchCount").textContent = `${filtered.length} batches${state.query ? " found" : ""}`;
   $("#batchGrid").innerHTML = visible.map((b,i) => {
     const id = batchId(b), name = batchName(b), img = imageUrl(b), dates = batchDates(b);
-    const price = pick(b,["feeTotal","price","finalPrice","amount","batchPrice"],0);
     const language = pick(b,["language","medium","batchLanguage"],"");
     return `<article class="batch-card">
-      <div class="batch-card-head"><h2>${esc(name)}</h2><span class="new-tag">New</span></div>
       ${img ? `<img class="batch-cover" src="${esc(img)}" alt="${esc(name)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;batch-cover fallback&quot;>${esc(name)}</div>'">` : `<div class="batch-cover fallback">${esc(name)}</div>`}
-      <div class="batch-meta">
-        ${pick(b,["byName","subtitle","target"],"") ? `<div class="meta-line">${esc(pick(b,["byName","subtitle","target"],""))}</div>` : ""}${language ? `<div class="meta-line"><span class="meta-icon">♙</span>${esc(language)}</div>` : ""}
-        ${dates ? `<div class="meta-line"><span class="meta-icon">▦</span>${esc(dates)}</div>` : ""}
-      </div>
-      <div class="price-row"><span class="price">${Number(price)===0 ? "₹ FREE" : `₹ ${esc(price)}`}</span><span class="free-tag">${Number(price)===0 ? "100% Free For Students" : "Batch access"}</span></div>
-      <div class="card-actions"><button class="study-btn" data-study="${esc(id)}">♧ &nbsp; Study</button><button class="enroll-btn" data-enroll="${esc(id)}">Enroll Now &nbsp; ♧</button></div>
+      <div class="batch-card-body"><div class="batch-kicker">Class 10</div><h2>${esc(name)}</h2>
+      <div class="batch-meta"><div class="meta-line">▤ &nbsp;Boards / Foundation</div>${language ? `<div class="meta-line">♙ &nbsp;${esc(language)}</div>` : ""}${dates ? `<div class="meta-line">🔴 &nbsp;Ongoing | ${esc(dates)}</div>` : ""}</div>
+      <div class="price-row"><span class="price">FREE</span><span class="free-tag">100% OFF</span></div>
+      <div class="card-actions"><button class="enroll-btn" data-enroll="${esc(id)}">${enrolled.includes(String(id)) ? "Enrolled ✓" : "Enroll"}</button><button class="arrow-btn" aria-label="Open batch" data-open="${esc(id)}">›</button></div></div>
     </article>`;
   }).join("");
-  $("#listMessage").textContent = filtered.length ? "" : (state.query ? "No matching batches found." : "No batches returned by the API.");
+  $("#listMessage").textContent = filtered.length ? "" : (onlyMine ? "You haven't enrolled in any batches yet. Open Batches and tap Enroll." : state.query ? "No matching batches found." : "No batches returned by the API.");
   $("#loadMoreBtn").textContent = visible.length < filtered.length ? `Show more batches (${filtered.length-visible.length} remaining)` : "All visible batches shown";
   $("#loadMoreBtn").classList.toggle("hidden", visible.length >= filtered.length);
   $("#loadMoreBtn").disabled = visible.length >= filtered.length;
@@ -180,7 +181,7 @@ async function loadBatches(reset=false) {
 function showDetailPanels(tab) {
   state.detailTab = tab;
   $("#descriptionPanel").classList.add("hidden");
-  $("#todayCard").classList.toggle("hidden", tab !== "live");
+  $("#todayCard").classList.remove("hidden");
   $("#subjectsPanel").classList.toggle("hidden", tab !== "classes");
   $("#testsPanel").classList.toggle("hidden", tab !== "tests");
   $("#announcementsPanel").classList.add("hidden");
@@ -198,7 +199,7 @@ async function openBatch(id) {
   $("#detailTitle").textContent=state.batch ? batchName(state.batch) : "Batch Details";
   $("#batchDescription").textContent="Loading details…";
   $("#todayContent").textContent="Loading schedule…";
-  setPage("detail"); showDetailPanels("tests");
+  setPage("detail"); showDetailPanels("classes");
   try {
     const details = await api("/api/BatchInfo",{BatchId:id,Type:"details"});
     const d = details?.data || details?.batch || details;
@@ -298,6 +299,22 @@ function pdfUrlFrom(payload) {
   if (att) return pdfUrlFrom(att);
   return "";
 }
+async function fetchPdfFromPwthor(lesson) {
+  const params = new URLSearchParams({
+    BatchId: state.batchId || "6a2f85a26fe4e9c73994095e",
+    SubjectId: subjectId(state.subject) || "science-by-raj-sir-971873",
+    PdfId: pick(lesson,["pdfId","PdfId","contentId","ContentId","id","_id"],"6aad46a836544c8dd3b840fb"),
+    HomeworkId: pick(lesson,["homeworkId","HomeworkId","homework_id"],"6ac901918e745b09bf344f9a")
+  });
+  const response = await fetch(`/pdf-proxy?${params.toString()}`);
+  if (!response.ok) throw new Error(`PDF API ${response.status}`);
+  const type = response.headers.get("content-type") || "";
+  const body = await response.text();
+  if (type.includes("json") || /^[\\s]*[\\[{]/.test(body)) {
+    try { return JSON.parse(body); } catch {}
+  }
+  return body;
+}
 async function openLesson(index){
   const lesson=state.lessons[index]; if(!lesson)return; state.lesson=lesson;
   const kind=state.contentType.toLowerCase();
@@ -310,12 +327,11 @@ async function openLesson(index){
   if (kind.includes("note") || kind.includes("pdf")) {
     let url="";
     try {
-      const pdf=await api("/api/GetPdf",{BatchId:state.batchId,SubjectId:subjectId(state.subject),PdfId:pick(lesson,["pdfId","PdfId","contentId","ContentId","id","_id"]),AttachmentId:pick(lesson,["attachmentId","AttachmentId","attachment_id"],pick(lesson,["_id","id"]))});
+      const pdf=await fetchPdfFromPwthor(lesson);
       url=pdfUrlFrom(pdf);
     } catch {}
     if (!url) url=pick(lesson,["url","pdfUrl","fileUrl","link","attachmentUrl"]);
     if (!url && (lesson.key || lesson.baseUrl)) url=pdfUrlFrom(lesson);
-    if (!url && kind === "notes") url="https://static.pw.live/5eb393ee95fab7468a79d189/ADMIN/3cfc7ab8-b408-4299-80d7-71e8edc77d26.pdf";
     if (url) { window.open(url,"_blank","noopener"); toast("Notes PDF opened"); }
     else toast("PDF URL response mein nahi mila.");
     return;
@@ -359,20 +375,35 @@ $("#refreshBtn").addEventListener("click",()=>loadBatches(true));
 $("#loadMoreBtn").addEventListener("click",()=>{state.visibleLimit=(state.visibleLimit||120)+120;renderBatches();});
 $("#backBtn").addEventListener("click",()=>setPage("batches"));
 $("#batchGrid").addEventListener("click",e=>{
-  const study=e.target.closest("[data-study]"), enroll=e.target.closest("[data-enroll]");
+  const enroll=e.target.closest("[data-enroll]"), open=e.target.closest("[data-open]");
+  if (enroll) {
+    const id=String(enroll.dataset.enroll), b=state.batches.find(x=>String(batchId(x))===id);
+    const enrolled=JSON.parse(localStorage.getItem("pm-enrolled-batches")||"[]").map(String);
+    if(!enrolled.includes(id)){enrolled.push(id);localStorage.setItem("pm-enrolled-batches",JSON.stringify(enrolled));}
+    $("#enrollMessage").textContent=`You have successfully enrolled in ${batchName(b||{})}. You can find it in My Batches.`;
+    $("#enrollModal").classList.remove("hidden"); renderBatches(); return;
+  }
+  if(open){openBatch(open.dataset.open);return;}
   const card=e.target.closest(".batch-card");
-  if(study) openBatch(study.dataset.study);
-  else if(!enroll && card){const b=state.batches.find(x=>card.querySelector("[data-enroll]")?.dataset.enroll===String(batchId(x)));if(b)openBatch(batchId(b));}
-  if(enroll){const b=state.batches.find(x=>String(batchId(x))===String(enroll.dataset.enroll));toast(`Congratulations 🎉 ${batchName(b||{})} selected!`);openBatch(enroll.dataset.enroll);}
+  if(card){const btn=card.querySelector("[data-open]");if(btn)openBatch(btn.dataset.open);}
 });
+$("#closeEnrollModal").addEventListener("click",()=>$("#enrollModal").classList.add("hidden"));
+$("#enrollModal").addEventListener("click",e=>{if(e.target.id==="enrollModal")$("#enrollModal").classList.add("hidden");});
 $("#drawer").addEventListener("click",e=>{
   const btn=e.target.closest("[data-page]");if(!btn)return;
   const page=btn.dataset.page;
-  if(page==="tests"){setPage("tests");return;}
-  if(page==="mybatches"){toast("My Batches: saved/enrolled batches feature can be connected to an account.");setPage("batches");return;}
-  if(page==="study"){setPage("batches");return;}
+  if(page==="mybatches"||page==="study"){setPage("mybatches");return;}
   setPage("batches");
 });
+document.querySelector(".bottom-nav")?.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-page]");if(!btn)return;
+  const page=btn.dataset.page;
+  if(page==="pi"||page==="books"||page==="tests"){setPage(page);return;}
+  if(page==="study"||page==="mybatches"){setPage("mybatches");return;}
+  setPage("batches");
+});
+$("#topSearchInput").addEventListener("input",e=>{state.query=e.target.value.trim();$("#searchInput").value=e.target.value;renderBatches();});
+$("#changeCourseBtn").addEventListener("click",()=>toast("More course categories are coming soon."));
 $("#detailTabs").addEventListener("click",e=>{const btn=e.target.closest("[data-tab]");if(btn)showDetailPanels(btn.dataset.tab);});
 $("#subjectList").addEventListener("click",e=>{const btn=e.target.closest("[data-subject]");if(btn)openSubject(Number(btn.dataset.subject));});
 $("#chapterList").addEventListener("click",e=>{const btn=e.target.closest("[data-topic]");if(btn)openTopic(Number(btn.dataset.topic));});
@@ -382,7 +413,7 @@ $("#backSubjectsBtn").addEventListener("click",()=>{$("#chaptersPanel").classLis
 $("#backChaptersBtn").addEventListener("click",()=>{$("#contentPanel").classList.add("hidden");$("#chaptersPanel").classList.remove("hidden");});
 $("#backLessonsBtn").addEventListener("click",()=>{$("#playerPanel").classList.add("hidden");$("#contentPanel").classList.remove("hidden");});
 $("#announcementBtn").addEventListener("click",loadAnnouncements);
-$("#shareBatchBtn").addEventListener("click",async()=>{try{await navigator.clipboard.writeText(location.href);toast("Batch page link copied");}catch{toast("Share is not available in this browser.");}});
+
 $("#testList").addEventListener("click",async e=>{
   const btn=e.target.closest("[data-test]");if(!btn)return;
   const test=state.tests?.[Number(btn.dataset.test)];if(!test)return;
