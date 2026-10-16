@@ -46,3 +46,11 @@ Optional environment variable:
 - Footer text: `DEVELOPED BY SUBHAN ALI`.
 
 The upstream APIs may require a valid authorized session and can return 403. The site does not bypass upstream authorization. Test/DPP and content IDs are mapped from fields present in the API response; if a particular batch uses different field names, those fields may need a mapping adjustment.
+
+
+## Requested UI refresh
+- Home page now follows the white PW-style course catalogue layout, with top search, course category strip, popular batch cards and a fixed bottom navigation.
+- Batch cards are free. **Enroll** stores the batch in this browser and shows a Congratulations popup; the arrow opens the batch directly without enrolling.
+- Study opens My Batches. Pi, PW Books and Test open a Coming Soon screen.
+- The three-line menu includes Join Telegram, Batches and My Batches.
+- Notes/PDF requests are routed through the fixed `/pdf-proxy` endpoint to `https://pwthor.live/api/GetPdf`, using the selected batch, subject and PDF/homework identifiers when available. The example IDs are fallbacks only.
