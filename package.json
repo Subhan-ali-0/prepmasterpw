@@ -1,12 +1,10 @@
 {
-  "name": "prep-master",
-  "version": "1.0.0",
-  "private": true,
   "type": "module",
-  "engines": { "node": ">=18" },
-  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "cors": "^2.8.5"
   }
 }
