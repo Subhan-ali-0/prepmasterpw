@@ -11,43 +11,35 @@
   <header class="topbar">
     <button class="icon-btn" id="menuBtn" aria-label="Open menu"><span class="hamburger">☰</span></button>
     <button class="back-btn hidden" id="backBtn">‹ <span>Back</span></button>
-    <div class="top-spacer"></div>
-    <div class="xp-pill">⭐ <b id="xpValue">0 XP</b></div>
-    <button class="icon-btn" id="themeBtn" aria-label="Toggle theme">☼</button>
-    <div class="avatar">PM</div>
+    <div class="top-search"><span>⌕</span><input id="topSearchInput" placeholder="Search for" autocomplete="off"></div>
   </header>
 
   <div class="scrim hidden" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-hidden="true">
     <div class="drawer-brand"><div class="brand-mark">ϟ</div><b>PREP MASTER</b><span class="cap-icon">♧</span></div>
     <nav>
-      <button class="nav-item" data-page="study"><span>▣</span> Study</button>
+      <a class="nav-item" href="https://t.me/prepmaster0" target="_blank" rel="noopener"><span>➤</span> Join Telegram</a>
       <button class="nav-item active" data-page="batches"><span>▤</span> Batches</button>
       <button class="nav-item" data-page="mybatches"><span>♧</span> My Batches</button>
-      <a class="nav-item" href="https://t.me/prepmaster0" target="_blank" rel="noopener"><span>➤</span> Join Telegram</a>
-      <button class="nav-item" data-page="tests"><span>☑</span> Test Series</button>
     </nav>
     <div class="drawer-footer">DEVELOPED BY SUBHAN ALI</div>
   </aside>
 
   <main id="appMain">
     <section id="batchListPage" class="page">
-      <div class="outer-panel">
-        <h1>Batches</h1>
-        <form class="searchbar" id="searchForm">
-          <span class="search-icon">⌕</span>
-          <input id="searchInput" placeholder="Search Your Batch" autocomplete="off">
-          <button type="submit">Search</button>
-        </form>
-        <div class="promo-banner">
-          <div class="promo-copy"><small>WELCOME TO</small><strong>PREP MASTER</strong><span>LEARN • PRACTICE • SUCCEED</span></div>
-          <div class="promo-orbit">PM</div>
-        </div>
+      <div class="home-course-strip"><span class="course-symbol">▣</span><strong>Foundation - Class 10 UP Board</strong><button id="changeCourseBtn">Change</button></div>
+      <div class="other-batches"><b>VIEW OTHER<br>BATCHES</b><div class="course-chips"><button>Chessmate by PW</button><button>11 NEET</button><button>11 IIT JEE</button><button>11 CBSE</button></div></div>
+      <div class="home-content">
+        <h1 id="homeHeading">Popular courses</h1>
+        <form class="searchbar home-search" id="searchForm"><span class="search-icon">⌕</span><input id="searchInput" placeholder="Search Your Batch" autocomplete="off"><button type="submit">Search</button></form>
         <div class="result-line"><span id="batchCount">Loading batches…</span><button id="refreshBtn" class="subtle-btn">↻ Refresh</button></div>
         <div id="batchGrid" class="batch-grid"></div>
         <button id="loadMoreBtn" class="load-more hidden">Load more batches</button>
         <p id="listMessage" class="message"></p>
       </div>
+      <nav class="bottom-nav">
+        <button data-page="study"><span>▤</span>Study</button><button class="active" data-page="batches"><span>▣</span>Batches</button><button data-page="pi"><span>π</span>Pi <small>New</small></button><button data-page="books"><span>♧</span>PW Books</button><button data-page="tests"><span>▤</span>Test</button>
+      </nav>
     </section>
 
     <section id="batchDetailPage" class="page hidden">
@@ -59,7 +51,7 @@
           <button class="detail-tab" data-tab="live">🔴<span>Live Classes</span></button>
         </div>
         <div class="detail-actions">
-          <button id="shareBatchBtn">▢ Share Batch</button>
+          
           <button id="announcementBtn">♧ Announcement</button>
         </div>
       </div>
@@ -104,8 +96,9 @@
     </section>
 
     <section id="comingSoonPage" class="page hidden">
-      <div class="coming-card"><div class="coming-icon">☑</div><h1>Test Series</h1><p>Coming Soon</p><span>Prep Master</span></div>
+      <div class="coming-card"><div class="coming-icon">☑</div><h1 id="comingTitle">Coming Soon</h1><p>Coming Soon</p><span>Prep Master</span></div>
     </section>
+    <div class="modal-scrim hidden" id="enrollModal"><div class="enroll-modal" role="dialog" aria-modal="true"><div class="celebrate">🎉</div><h2>Congratulations 🎉</h2><p id="enrollMessage">You have successfully enrolled in this batch.</p><button id="closeEnrollModal">Continue</button></div></div>
   </main>
   <footer>DEVELOPED BY SUBHAN ALI</footer>
   <div class="toast" id="toast" role="status"></div>
