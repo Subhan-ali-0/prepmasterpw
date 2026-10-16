@@ -1,56 +1,28 @@
 # Prep Master
 
-A responsive Prep Master learning portal inspired by the screenshots provided:
-- Home batch catalogue with search, batch cards, Study and Enroll actions
-- Side drawer with Study, Batches, My Batches, Join Telegram, Test Series
-- Batch page with Description, All Classes, Tests, Infinity Learning, today's class, subjects, topics and lesson types
-- Light/dark theme
-- Express server-side proxy with a fixed upstream host and endpoint allowlist
+Prep Master is a lightweight Node.js + Express study website. The default UI is white/light, with a batch search, Enroll popup, My Batches, batch details, subjects/topics, lectures, notes, DPP PDFs/videos, tests and Khazana routes.
 
 ## Run locally
-Requires Node.js 18 or newer.
 
-```bash
-npm install
-npm start
-```
+1. Install Node.js 18 or newer.
+2. In this folder run `npm install`.
+3. Run `npm start`.
+4. Open `http://localhost:3000`.
 
-Open `http://localhost:3000`.
+## Data connections
 
-## Deploy
-Deploy this folder to a Node.js host that supports Express (Render, Railway, or a compatible Node service). Set the start command to `npm start`. The app serves both the frontend and `/proxy/...` API routes from the same origin.
+- Batch catalogue source: `https://prepmasterpw.vercel.app/api/batches`
+- StreamVideo/PenPencil proxy base: `https://proxy.streamvideo.co.in/fetch`
+- Frontend calls same-origin `/proxy/...` endpoints; StreamVideo API data is fetched by `server.js`, not directly by browser JavaScript.
+- `GET /api/health` reports the server configuration.
 
-Optional environment variable:
-- `UPSTREAM_API_ORIGIN` (default `https://www.learnxpw.site`)
+## Important limitations
 
-## Important API notes
-- Batch listing starts at `/api/AllBatches?page=1`. The observed response reports `totalPages: 682`, `pageSize: 20`, and `total: 13631`; the app now requests all pages in small groups and makes the loaded list searchable. It renders up to 120 cards at once for performance, with “Show more batches” to reveal more cards. Batch thumbnails can use the nested `previewImage.baseUrl + previewImage.key` shape returned by the API.
-- The IDs in example endpoints are not hardcoded; IDs are taken from API responses.
-- The actual API response schemas can vary. If an endpoint uses different field names, adjust the `pick()` key lists in `public/app.js`. For the observed BatchInfo response, subjects are in `data.subjects`, display names use `subject`, and the SubjectInfo URL uses the subject `slug` (for example `physics-688645`), not the internal `subjectId` field.
-- Some providers may require authorization, cookies, valid signed URLs, or approved access. The proxy does not bypass authentication or access controls. Do not put private API keys or credentials in frontend code.
-- The browser-internal `chrome-extension://.../pdf_viewer_wrapper.js` files are not API endpoints and are intentionally not used.
-- Signed video URLs expire; resolve a fresh URL when a lesson is opened.
-- The `get-otp` and user-details endpoints are allowlisted only for the app's authorized integration; this starter does not expose OTP secrets or list other users' private data.
-- Test instructions can be requested, but starting a test and fetching/submitting questions must be connected to the provider's documented endpoints and response format. This app does not invent missing test APIs.
-- For all batches to load, the API must permit paginated requests. The UI includes Load more rather than assuming page 1 contains everything.
-- Footer text is exactly: **DEVELOPED BY SUBHAN ALI**.
-- Telegram link: https://t.me/prepmaster0
+- The batch catalogue is a separate source from StreamVideo content. A batch's IDs must be compatible with the StreamVideo endpoints for its details/subjects to load.
+- Proxying helps avoid browser CORS errors, but does not bypass provider authentication, 401/403 responses, or DRM.
+- No working announcements endpoint or test-start/questions endpoint was supplied. The UI reports this instead of inventing endpoints.
+- Lecture playback opens the supplied watch page. Whether that external page embeds or plays is controlled by that provider.
 
-## Final UI/content updates
-- Batch cards use the title, banner image, audience/language, dates, price and Study/Enroll actions; tapping a card opens its details.
-- Batch detail tabs: Tests, All Classes and Live Classes.
-- Content filters: Lectures, DPPs, Notes, DPP PDFs and DPP Videos.
-- Lectures open the supplied LearnXPW `/watch` page using the selected batch, subject, topic and lesson IDs. This depends on the upstream page allowing the user's access/session.
-- Tests and DPPs open the supplied LearnXPW practice pages with IDs from the selected item where available.
-- Notes use the GetPdf response `data.baseUrl + data.key`, direct attachment URLs, or the provided static notes PDF fallback.
-- Footer text: `DEVELOPED BY SUBHAN ALI`.
+## Deployment
 
-The upstream APIs may require a valid authorized session and can return 403. The site does not bypass upstream authorization. Test/DPP and content IDs are mapped from fields present in the API response; if a particular batch uses different field names, those fields may need a mapping adjustment.
-
-
-## Requested UI refresh
-- Home page now follows the white PW-style course catalogue layout, with top search, course category strip, popular batch cards and a fixed bottom navigation.
-- Batch cards are free. **Enroll** stores the batch in this browser and shows a Congratulations popup; the arrow opens the batch directly without enrolling.
-- Study opens My Batches. Pi, PW Books and Test open a Coming Soon screen.
-- The three-line menu includes Join Telegram, Batches and My Batches.
-- Notes/PDF requests are routed through the fixed `/pdf-proxy` endpoint to `https://pwthor.live/api/GetPdf`, using the selected batch, subject and PDF/homework identifiers when available. The example IDs are fallbacks only.
+Deploy this folder to a Node.js host that runs `npm install` and `npm start`. Set the service's port through the `PORT` environment variable if your host requires it. Keep any provider credentials server-side; do not place secrets in `public/app.js`.
