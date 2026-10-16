@@ -89,12 +89,8 @@ function setPage(name) {
   $("#homeHeading").textContent = name === "mybatches" || name === "study" ? "My Batches" : "Popular courses";
   renderBatches();
   $("#backBtn").classList.toggle("hidden", name !== "detail");
-  $("#menuBtn").classList.toggle("hidden", name === "detail");
-  closeDrawer();
   window.scrollTo({top:0,behavior:"smooth"});
 }
-function openDrawer(){ $("#drawer").classList.add("open"); $("#scrim").classList.remove("hidden"); $("#drawer").setAttribute("aria-hidden","false"); }
-function closeDrawer(){ $("#drawer").classList.remove("open"); $("#scrim").classList.add("hidden"); $("#drawer").setAttribute("aria-hidden","true"); }
 function batchId(b) { return pick(b,["_id","BatchId","batchId","batch_id","id"]); }
 function batchName(b) { return pick(b,["name","batchName","BatchName","title","batch_name","courseName"],"Untitled Batch"); }
 function imageUrl(b) { return nestedImage(pick(b,["previewImage","previewImageUrl","iosPreviewImageUrl","image","batchImage","batch_image","batchBanner","bannerUrl","banner","thumbnail","thumbnailUrl","thumbnail_url","coverImage","cover_image","imageUrl","image_url","img"])); }
@@ -174,7 +170,7 @@ async function loadBatches(reset=false) {
     renderBatches();
   } catch (e) {
     $("#batchCount").textContent = state.batches.length ? `${state.batches.length} batches loaded` : "Batches unavailable";
-    $("#listMessage").textContent = `${e.message}. Check the /proxy/api/AllBatches?page=1 response.`;
+    $("#listMessage").textContent = `${e.message}. Check the /proxy/api/AllBatches response. This proxy uses your batches API URL.`;
     renderBatches();
   } finally { state.loadingAll = false; }
 }
@@ -272,7 +268,7 @@ async function openTopic(index){
   await loadLessons("videos");
 }
 async function loadLessons(type){
-  // Match the content-type names expected by the LearnXPW TopicInfo API.
+  // Use StreamVideo/PenPencil content type names.
   if(type==="dpps") type="DppVideos";
   if(type==="dpp-pdfs") type="DppNotes";
   if(type==="videos") type="videos";
@@ -313,38 +309,14 @@ function pdfUrlFrom(payload) {
   if (att) return pdfUrlFrom(att);
   return "";
 }
-async function fetchPdfFromPwthor(lesson) {
-  const params = new URLSearchParams({
-    BatchId: state.batchId || "6a2f85a26fe4e9c73994095e",
-    SubjectId: subjectId(state.subject) || "science-by-raj-sir-971873",
-    PdfId: pick(lesson,["pdfId","PdfId","contentId","ContentId","id","_id"],"6aad46a836544c8dd3b840fb"),
-    HomeworkId: pick(lesson,["homeworkId","HomeworkId","homework_id"],"6ac901918e745b09bf344f9a")
-  });
-  const response = await fetch(`/pdf-proxy?${params.toString()}`);
-  if (!response.ok) throw new Error(`PDF API ${response.status}`);
-  const type = response.headers.get("content-type") || "";
-  const body = await response.text();
-  if (type.includes("json") || /^[\\s]*[\\[{]/.test(body)) {
-    try { return JSON.parse(body); } catch {}
-  }
-  return body;
-}
 async function openLesson(index){
   const lesson=state.lessons[index]; if(!lesson)return; state.lesson=lesson;
   const kind=state.contentType.toLowerCase();
   const title=pick(lesson,["name","title","videoName","contentName","lessonName","fileName","attachmentName"],"Lesson");
-  if (kind.includes("dpp")) {
-    const id=pick(lesson,["exerciseId","dppId","testId","contentId","ContentId","id","_id"]);
-    const params=new URLSearchParams({type:"Start",source:"BATCH_QUIZ",testSource:"BATCH_QUIZ",scheduleId:pick(lesson,["scheduleId","batchScheduleId"],id),batchScheduleId:pick(lesson,["batchScheduleId","scheduleId"],id),batchId:state.batchId,chapterId:pick(lesson,["chapterId","chapter_id"],topicId(state.topic)),subjectId:pick(lesson,["subjectId","subject_id"],subjectId(state.subject)),exerciseId:id,mode:"Online",startTime:pick(lesson,["startTime"],String(Date.now()))});
-    window.location.href=`https://www.learnxpw.site/practice-v2/dpp/${encodeURIComponent(id)}?${params.toString()}`; return;
-  }
   if (kind.includes("note") || kind.includes("pdf")) {
     let url="";
-    try {
-      const pdf=await fetchPdfFromPwthor(lesson);
-      url=pdfUrlFrom(pdf);
-    } catch {}
-    if (!url) url=pick(lesson,["url","pdfUrl","fileUrl","link","attachmentUrl"]);
+    url=pick(lesson,["url","pdfUrl","fileUrl","link","downloadUrl","attachmentUrl","src"]);
+    if (!url) url=pdfUrlFrom(lesson);
     if (!url && (lesson.key || lesson.baseUrl)) url=pdfUrlFrom(lesson);
     if (url) { window.open(url,"_blank","noopener"); toast("Notes PDF opened"); }
     else toast("PDF URL response mein nahi mila.");
@@ -356,7 +328,7 @@ async function openLesson(index){
   // Keep a visible fallback for browsers that block popups.
   $("#contentPanel").classList.add("hidden"); $("#playerPanel").classList.remove("hidden");
   $("#playerTitle").textContent=title;
-  $("#playerWrap").innerHTML=`<div class="watch-fallback"><p>Lecture is opened on the authorized LearnXPW watch page.</p><a href="${esc(url)}" target="_blank" rel="noopener">Open lecture</a></div>`;
+  $("#playerWrap").innerHTML=`<div class="watch-fallback"><p>Lecture watch page opened in a new tab.</p><a href="${esc(url)}" target="_blank" rel="noopener">Open lecture</a></div>`;
   $("#playerMeta").textContent="If a new tab did not open, tap Open lecture.";
 }
 async function loadTests(){
@@ -379,8 +351,6 @@ async function loadAnnouncements(){
     $("#announcementList").innerHTML=items.length?items.map(a=>`<article class="subject-item"><span class="subject-icon">♧</span><span><strong>${esc(pick(a,["title","name","heading"],"Announcement"))}</strong><small>${esc(pick(a,["message","description","content","date"],""))}</small></span></article>`).join(""):"<p class='message'>No announcements yet.</p>";
   }catch(e){$("#announcementList").innerHTML=`<p class='message'>${esc(e.message)}</p>`;}
 }
-$("#menuBtn").addEventListener("click",openDrawer);
-$("#scrim").addEventListener("click",closeDrawer);
 const themeBtn = $("#themeBtn");
 if (themeBtn) themeBtn.addEventListener("click",()=>{document.body.classList.toggle("dark");localStorage.setItem("pm-theme",document.body.classList.contains("dark")?"dark":"light");});
 if(localStorage.getItem("pm-theme")==="dark")document.body.classList.add("dark");
@@ -406,12 +376,6 @@ $("#batchGrid").addEventListener("click",e=>{
 });
 $("#closeEnrollModal").addEventListener("click",()=>$("#enrollModal").classList.add("hidden"));
 $("#enrollModal").addEventListener("click",e=>{if(e.target.id==="enrollModal")$("#enrollModal").classList.add("hidden");});
-$("#drawer").addEventListener("click",e=>{
-  const btn=e.target.closest("[data-page]");if(!btn)return;
-  const page=btn.dataset.page;
-  if(page==="mybatches"||page==="study"){setPage("mybatches");return;}
-  setPage("batches");
-});
 document.querySelector(".bottom-nav")?.addEventListener("click",e=>{
   const btn=e.target.closest("[data-page]");if(!btn)return;
   const page=btn.dataset.page;
@@ -440,16 +404,7 @@ $("#testList").addEventListener("click",async e=>{
     const msg = pick(detail,["instructions","instruction","description","message","title"],"Test instructions received.");
     const ok=window.confirm(`${pick(test,["testName","name","title"],"Test")}\n\n${typeof msg==="string"?msg:JSON.stringify(msg)}\n\nStart test?`);
     if(!ok)return;
-    const testParams=new URLSearchParams({type:"Start",source:"BATCH_TEST_SERIES",mode:"Online",startTime:pick(test,["startTime"],"1777782654000"),lang:pick(test,["lang"],"en"),batchId:state.batchId,testSource:"BATCH_TEST_SERIES"});
-    window.open(`https://www.learnxpw.site/practice-v2/test/${encodeURIComponent(testId)}?${testParams.toString()}`,"_blank","noopener");
-    const started=await api("/api/batch-tests",{testId,batchId:state.batchId,type:"Start",testSource:"BATCH_TEST_SERIES"});
-    const questions=listFrom(started,"lessons");
-    if(questions.length){
-      $("#testList").innerHTML=`<h3>${esc(pick(test,["testName","name","title"],"Test"))}</h3>`+questions.map((q,i)=>`<article class="subject-item"><span class="subject-icon">${i+1}</span><span><strong>${esc(pick(q,["question","questionText","title","text","name"],"Question"))}</strong><small>${esc(Array.isArray(q.options)?q.options.map((o,j)=>`${String.fromCharCode(65+j)}. ${typeof o==="string"?o:pick(o,["text","value","label"],JSON.stringify(o))}`).join(" · "):pick(q,["optionsText","marks","type"],""))}</small></span></article>`).join("");
-    } else {
-      const printable=typeof started==="string"?started:JSON.stringify(started,null,2);
-      $("#testList").innerHTML=`<div class="subject-item"><span class="subject-icon">ℹ</span><span><strong>Test start response received</strong><small>Questions format is not recognized yet. This is the actual API response for mapping, not a failed instruction load.</small></span></div><pre class="api-debug">${esc((printable||"No response body").slice(0,5000))}</pre>`;
-    }
+    $("#testList").innerHTML=`<article class="subject-item"><span class="subject-icon">📝</span><span><strong>${esc(pick(test,["testName","name","title"],"Test instructions"))}</strong><small>${esc(typeof msg === "string" ? msg : JSON.stringify(msg))}</small><p class="message">Instructions loaded through the StreamVideo proxy. The supplied API list does not include a test-start/questions endpoint, so this page will not invent one.</p></span></article>`;
   } catch(err){toast("Test start/instructions unavailable: "+err.message);}
 });
 const totalBtn=document.querySelector("#totalBatchesBtn"), favBtn=document.querySelector("#favouritesBtn");
